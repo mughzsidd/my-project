@@ -38,15 +38,15 @@
 // Kp: main corrective force. Start around 15-30.
 // Ki: eliminates steady-state offset. Start small (0.5-2).
 // Kd: damps oscillations. Start around 0.1-0.5.
-#define KP  20.0f
-#define KI  2.0f
-#define KD  0.7f
+#define KP  50.0f
+#define KI  0.0f
+#define KD  1.2f
 
 /* ---- Setpoint ---- */
 // The target angle in degrees (0 = perfectly upright)
 // You may need to offset this slightly if your robot's center
 // of gravity isn't perfectly centered. Tune by observation.
-#define SETPOINT 0.0f
+#define SETPOINT 8.0f
 
 /* ---- Output Limits ---- */
 #define PID_OUT_MAX  999.0f   // TIM3 period = 999, so max PWM = 999
@@ -105,7 +105,7 @@ static void MX_TIM2_Init(void);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 
-/* ============================================================
+/* ===========================================center=================
  *  I3G4250D (Gyroscope) SPI Read/Write
  * ============================================================ */
 void I3G_WriteReg(uint8_t reg_addr, uint8_t data) {
@@ -741,7 +741,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
          *    The Motors_Drive() function handles the sign.
          */
 
-        float error = tilt_angle - SETPOINT;
+        float error = tilt_angle + SETPOINT;
 
         // P term
         float p_term = KP * error;
