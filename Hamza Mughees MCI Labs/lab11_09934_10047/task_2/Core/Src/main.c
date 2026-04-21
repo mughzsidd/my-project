@@ -38,9 +38,9 @@
 // Kp: main corrective force. Start around 15-30.
 // Ki: eliminates steady-state offset. Start small (0.5-2).
 // Kd: damps oscillations. Start around 0.1-0.5.
-#define KP  41.0f
-#define KI  0.15f
-#define KD  1.15f
+#define KP  60.0f
+#define KI  0.1f
+#define KD  1.2f
 
 /* ---- Setpoint ---- */
 // The target angle in degrees (0 = perfectly upright)
