@@ -3,98 +3,78 @@ import matplotlib.pyplot as plt
 from collections import deque
 
 # === Setup Serial ===
-ser = serial.Serial('/dev/ttyACM0', 115200)
+# Ensure your STM32 code is also updated to 115200 in MX_USART1_UART_Init
+ser = serial.Serial('/dev/ttyACM0', 115200, timeout=1)
 plt.ion()
 
-# Data buffers
-accX_vals = deque(maxlen=500)
-gyroX_vals = deque(maxlen=500)
-angle_vals = deque(maxlen=500)
-filtered_accX_vals = deque(maxlen=500)
+# Data buffers (Updated to match main.c output)
+angle_vals = deque(maxlen=500)      # shared_angle
+acc_angle_vals = deque(maxlen=500)  # acc_angle
+gyro_rate_vals = deque(maxlen=500)  # gyro_rate
+pid_out_vals = deque(maxlen=500)    # shared_pid_out
 time_ms = deque(maxlen=500)
 cnt = 0
 
-# Filter parameters
-ALPHA = 0.3  # Smoothing factor (0-1), lower = more smoothing
-filtered_acc = 0  # Initial filtered value
-
 # === Plotting Function ===
 def makeFig():
+    plt.clf() # Clear entire figure for fresh subplots
+    
+    # Subplot 1: Angles (Filtered vs Accelerometer)
     plt.subplot(2, 1, 1)
-    plt.cla()
-    plt.title('Accelerometer X - Raw vs Exponential Moving Average')
+    plt.title('Robot Orientation (Degrees)')
     plt.grid(True)
-    plt.xlabel('Sample Number')
-    plt.ylabel('Acceleration (g)')
-    
-    if len(accX_vals) > 0:
-        plt.plot(list(time_ms), list(accX_vals), 'r.-', label='Raw accX', alpha=0.4, markersize=2)
-    if len(filtered_accX_vals) > 0:
-        plt.plot(list(time_ms), list(filtered_accX_vals), 'b-', label='EMA Filtered', linewidth=2)
-    
-    plt.legend(loc='upper right')
-    plt.ylim(-2, 2)
-    
-    plt.subplot(2, 1, 2)
-    plt.cla()
-    plt.title('Gyroscope X and Complementary Filter Angle')
-    plt.grid(True)
-    plt.xlabel('Sample Number')
-    plt.ylabel('Value')
-    
-    if len(gyroX_vals) > 0:
-        plt.plot(list(time_ms), list(gyroX_vals), 'g.-', label='Gyro X (dps)', alpha=0.4, markersize=2)
     if len(angle_vals) > 0:
-        plt.plot(list(time_ms), list(angle_vals), 'm-', label='Filtered Angle (deg)', linewidth=2)
-    
+        plt.plot(list(time_ms), list(angle_vals), 'm-', label='Filtered Angle', linewidth=2)
+        plt.plot(list(time_ms), list(acc_angle_vals), 'r-', label='Raw Acc Angle', alpha=0.3, markersize=2)
+    plt.ylabel('Angle (deg)')
     plt.legend(loc='upper right')
-    plt.ylim(-180, 180)
+    plt.ylim(-45, 45) # Adjusted for balancing range
+    
+    # Subplot 2: PID Output
+    plt.subplot(2, 1, 2)
+    plt.title('PID Controller Output (Motor Command)')
+    plt.grid(True)
+    if len(pid_out_vals) > 0:
+        plt.plot(list(time_ms), list(pid_out_vals), 'b-', label='PID Out')
+    plt.xlabel('Sample Count')
+    plt.ylabel('PWM Value')
+    plt.legend(loc='upper right')
+    plt.ylim(-1000, 1000) # Matches your PID_OUT_MAX
+    
     plt.tight_layout()
 
 # === Main Loop ===
-print("Starting plot with Exponential Moving Average filter (Alpha = 0.3)")
-print("Graph 1: Raw (red) vs Filtered (blue) Accelerometer X")
-print("Graph 2: Gyroscope X (green) and Filtered Angle (magenta)")
+print("Starting Plotter at 115200 Baud...")
+print("Receiving: Filtered Angle, Acc Angle, Gyro Rate, PID Output")
 
 try:
     while True:
-        while ser.inWaiting() == 0:
-            pass
+        if ser.inWaiting() > 0:
+            try:
+                line = ser.readline().decode('utf-8').strip()
+                values = line.split(',')
 
-        try:
-            line = ser.readline().decode().strip()
-            values = line.split(',')
+                # Match the 4 values sent by your sprintf in main.c
+                if len(values) == 4:
+                    angle_vals.append(float(values[0]))
+                    acc_angle_vals.append(float(values[1]))
+                    gyro_rate_vals.append(float(values[2]))
+                    pid_out_vals.append(float(values[3]))
+                    
+                    time_ms.append(cnt)
+                    cnt += 1
+                    
+                    # Performance optimization: Update plot every 10 samples
+                    if cnt % 10 == 0:
+                        makeFig()
+                        plt.pause(0.001)
 
-            if len(values) == 3:
-                accX = float(values[0])
-                gyroX = float(values[1])
-                angle = float(values[2])
-                
-                # Apply Exponential Moving Average (EMA) filter
-                if cnt == 0:
-                    filtered_acc = accX  # Initialize on first sample
-                else:
-                    filtered_acc = ALPHA * accX + (1 - ALPHA) * filtered_acc
-                
-                # Store values
-                accX_vals.append(accX)
-                filtered_accX_vals.append(filtered_acc)
-                gyroX_vals.append(gyroX)
-                angle_vals.append(angle)
-                time_ms.append(cnt)
-                cnt += 10
-                
-                makeFig()
-                plt.pause(0.0001)
-
-        except Exception as e:
-            print(f"Error: {e}")
-            continue
+            except (ValueError, UnicodeDecodeError):
+                # Ignore partial lines or decoding errors
+                continue
 
 except KeyboardInterrupt:
     print("\nStopping...")
-    
 finally:
     ser.close()
     plt.close()
-    print("Done!")
